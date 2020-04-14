@@ -524,10 +524,10 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 5 + 16:] > conf_thres).nonzero().t()    ###3  ###choice
-            x = torch.cat((box[i], x[i, j + 5 + 16].unsqueeze(1), j.float().unsqueeze(1)), 1) ###3
+            x = torch.cat((box[i], x[i, j + 5 + 16].unsqueeze(1), j.float().unsqueeze(1), x[i, 5:5 + 16]), 1) ###3  ###9
         else:  # best class only
             conf, j = x[:, 5 + 16:].max(1)    ###3
-            x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1)), 1)
+            x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1)), 1)    ###9
         
         # Filter by class
         if classes:
@@ -837,6 +837,8 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
         cv2.rectangle(img, c1, c2, color, -1)  # filled
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
 
+def plot_3d_box(x, img, color=None, label=None, line_thickness=None):
+    pass 
 
 def plot_wh_methods():  # from utils.utils import *; plot_wh_methods()
     # Compares the two methods for width-height anchor multiplication
