@@ -428,7 +428,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             lcls *= 3 / ng / model.nc
             lbox *= 3 / ng
 
-    loss = lbox + lobj + lcls + 0.0001 * lcorner  ###5
+    loss = lbox + lobj + lcls + 1. * lcorner  ###5  ###8
     return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
 
 
@@ -503,32 +503,32 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
     nc = prediction[0].shape[1] - 5 - 16 # number of classes    ###3
     multi_label &= nc > 1  # multiple labels per box
     output = [None] * len(prediction)
-
+    
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply conf constraint
         x = x[x[:, 4] > conf_thres]
-
+        
         # Apply width-height constraint
         x = x[((x[:, 2:4] > min_wh) & (x[:, 2:4] < max_wh)).all(1)]
-
+        
         # If none remain process next image
         if not x.shape[0]:
             continue
 
         # Compute conf
         x[..., 5 + 16:] *= x[..., 4:5]  # conf = obj_conf * cls_conf    ###3
-
+        
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
-            i, j = (x[:, 5 + 16:] > conf_thres).nonzero().t()    ###3
+            i, j = (x[:, 5 + 16:] > conf_thres).nonzero().t()    ###3  ###choice
             x = torch.cat((box[i], x[i, j + 5 + 16].unsqueeze(1), j.float().unsqueeze(1)), 1) ###3
         else:  # best class only
             conf, j = x[:, 5 + 16:].max(1)    ###3
             x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1)), 1)
-
+        
         # Filter by class
         if classes:
             x = x[(j.view(-1, 1) == torch.tensor(classes, device=j.device)).any(1)]
@@ -545,7 +545,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
         # Sort by confidence
         # if method == 'fast_batch':
         #    x = x[x[:, 4].argsort(descending=True)]
-
+        
         # Batched NMS
         c = x[:, 5] * 0 if agnostic else x[:, 5]  # classes
         boxes, scores = x[:, :4].clone() + c.view(-1, 1) * max_wh, x[:, 4]  # boxes (offset by class), scores
@@ -562,7 +562,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
         elif method == 'fast':  # FastNMS from https://github.com/dbolya/yolact
             iou = box_iou(boxes, boxes).triu_(diagonal=1)  # upper triangular iou matrix
             i = iou.max(0)[0] < iou_thres
-
+        
         output[xi] = x[i]
     return output
 
