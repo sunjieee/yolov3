@@ -436,7 +436,7 @@ def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
 
     nt = targets.shape[0]
-    targets = torch.cat((targets, torch.zeros(nt, 16).cuda()), 1)   ###4
+    #targets = torch.cat((targets, torch.zeros(nt, 16).cuda()), 1)   ###4  ###6
     tcls, tbox, indices, av, tcorners = [], [], [], [], []   ###4
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
     reject, use_all_anchors = True, True

@@ -333,9 +333,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                     continue
 
                 if l.shape[0]:
-                    assert l.shape[1] == 5, '> 5 label columns: %s' % file
-                    assert (l >= 0).all(), 'negative labels: %s' % file
-                    assert (l[:, 1:] <= 1).all(), 'non-normalized or out of bounds coordinate labels: %s' % file
+                    #assert l.shape[1] == 5, '> 5 label columns: %s' % file   ###6
+                    #assert (l >= 0).all(), 'negative labels: %s' % file      ###6
+                    #assert (l[:, 1:] <= 1).all(), 'non-normalized or out of bounds coordinate labels: %s' % file ###6
                     if np.unique(l, axis=0).shape[0] < l.shape[0]:  # duplicate rows
                         nd += 1  # print('WARNING: duplicate rows in %s' % self.label_files[i])  # duplicate rows
                     if single_cls:
@@ -365,7 +365,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             if not os.path.exists(Path(f).parent):
                                 os.makedirs(Path(f).parent)  # make new output folder
 
-                            b = x[1:] * [w, h, w, h]  # box
+                            b = x[1:5] * [w, h, w, h]  # box   ###6
                             b[2:] = b[2:].max()  # rectangle to square
                             b[2:] = b[2:] * 1.3 + 30  # pad
                             b = xywh2xyxy(b.reshape(-1, 4)).ravel().astype(np.int)
@@ -439,6 +439,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, 2] = ratio[1] * h * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
                 labels[:, 3] = ratio[0] * w * (x[:, 1] + x[:, 3] / 2) + pad[0]
                 labels[:, 4] = ratio[1] * h * (x[:, 2] + x[:, 4] / 2) + pad[1]
+                labels[:, 5:] = x[:, 5:]    ###6
 
         if self.augment:
             # Augment imagespace
@@ -480,7 +481,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if nL:
                     labels[:, 2] = 1 - labels[:, 2]
 
-        labels_out = torch.zeros((nL, 6))
+        labels_out = torch.zeros((nL, 6 + 16))  ###6
         if nL:
             labels_out[:, 1:] = torch.from_numpy(labels)
 
