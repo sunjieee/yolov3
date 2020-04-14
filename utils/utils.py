@@ -365,14 +365,15 @@ def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#iss
 
 def compute_loss(p, targets, model):  # predictions, targets, model
     ft = torch.cuda.FloatTensor if p[0].is_cuda else torch.Tensor
-    lcls, lbox, lobj = ft([0]), ft([0]), ft([0])
-    tcls, tbox, indices, anchor_vec = build_targets(model, targets)
+    lcls, lbox, lobj, lcorner = ft([0]), ft([0]), ft([0]), ft([0])  ###5
+    tcls, tbox, indices, anchor_vec, tcorners = build_targets(model, targets)  ###5
     h = model.hyp  # hyperparameters
     red = 'mean'  # Loss reduction (sum or mean)
 
     # Define criteria
     BCEcls = nn.BCEWithLogitsLoss(pos_weight=ft([h['cls_pw']]), reduction=red)
     BCEobj = nn.BCEWithLogitsLoss(pos_weight=ft([h['obj_pw']]), reduction=red)
+    L1corner = nn.L1Loss(reduction=red)      ###5
 
     # class label smoothing https://arxiv.org/pdf/1902.04103.pdf eqn 3
     cp, cn = smooth_BCE(eps=0.0)
@@ -403,7 +404,8 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             giou = bbox_iou(pbox.t(), tbox[i], x1y1x2y2=False, GIoU=True)  # giou computation
             lbox += (1.0 - giou).sum() if red == 'sum' else (1.0 - giou).mean()  # giou loss
             tobj[b, a, gj, gi] = (1.0 - model.gr) + model.gr * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
-
+            
+            lcorner += L1corner(ps[:, 5: 5 + 16], tcorners[i])   ###5
             if model.nc > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(ps[:, 5 + 16:], cn)  # targets   ###2
                 t[range(nb), tcls[i]] = cp
@@ -426,7 +428,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             lcls *= 3 / ng / model.nc
             lbox *= 3 / ng
 
-    loss = lbox + lobj + lcls
+    loss = lbox + lobj + lcls + 0.0001 * lcorner  ###5
     return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
 
 
@@ -434,7 +436,8 @@ def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
 
     nt = targets.shape[0]
-    tcls, tbox, indices, av = [], [], [], []
+    targets = torch.cat((targets, torch.zeros(nt, 16).cuda()), 1)   ###4
+    tcls, tbox, indices, av, tcorners = [], [], [], [], []   ###4
     multi_gpu = type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
     reject, use_all_anchors = True, True
     for i in model.yolo_layers:
@@ -480,8 +483,10 @@ def build_targets(model, targets):
             assert c.max() < model.nc, 'Model accepts %g classes labeled from 0-%g, however you labelled a class %g. ' \
                                        'See https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data' % (
                                            model.nc, model.nc - 1, c.max())
+        corner_xy = t[:, 6:]      ###4
+        tcorners.append(corner_xy)   ###4
 
-    return tcls, tbox, indices, av
+    return tcls, tbox, indices, av, tcorners   ###4
 
 
 def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=True, classes=None, agnostic=False):
