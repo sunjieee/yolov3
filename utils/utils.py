@@ -405,9 +405,9 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             tobj[b, a, gj, gi] = (1.0 - model.gr) + model.gr * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
 
             if model.nc > 1:  # cls loss (only if multiple classes)
-                t = torch.full_like(ps[:, 5:], cn)  # targets
+                t = torch.full_like(ps[:, 5 + 16:], cn)  # targets   ###2
                 t[range(nb), tcls[i]] = cp
-                lcls += BCEcls(ps[:, 5:], t)  # BCE
+                lcls += BCEcls(ps[:, 5 + 16:], t)  # BCE      ###2
                 # lcls += CE(ps[:, 5:], tcls[i])  # CE
 
             # Append targets to text file
@@ -495,7 +495,7 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
     min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
 
     method = 'merge'
-    nc = prediction[0].shape[1] - 5  # number of classes
+    nc = prediction[0].shape[1] - 5 - 16 # number of classes    ###3
     multi_label &= nc > 1  # multiple labels per box
     output = [None] * len(prediction)
 
@@ -511,17 +511,17 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
             continue
 
         # Compute conf
-        x[..., 5:] *= x[..., 4:5]  # conf = obj_conf * cls_conf
+        x[..., 5 + 16:] *= x[..., 4:5]  # conf = obj_conf * cls_conf    ###3
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
 
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
-            i, j = (x[:, 5:] > conf_thres).nonzero().t()
-            x = torch.cat((box[i], x[i, j + 5].unsqueeze(1), j.float().unsqueeze(1)), 1)
+            i, j = (x[:, 5 + 16:] > conf_thres).nonzero().t()    ###3
+            x = torch.cat((box[i], x[i, j + 5 + 16].unsqueeze(1), j.float().unsqueeze(1)), 1) ###3
         else:  # best class only
-            conf, j = x[:, 5:].max(1)
+            conf, j = x[:, 5 + 16:].max(1)    ###3
             x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1)), 1)
 
         # Filter by class

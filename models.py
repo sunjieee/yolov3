@@ -137,7 +137,7 @@ class YOLOLayer(nn.Module):
         self.nl = len(layers)  # number of output layers (3)
         self.na = len(anchors)  # number of anchors (3)
         self.nc = nc  # number of classes (80)
-        self.no = nc + 5  # number of outputs (85)
+        self.no = nc + 5 + 16  # number of outputs (85 + 16) ###1
         self.nx, self.ny, self.ng = 0, 0, 0  # initialize number of x, y gridpoints
         self.anchor_vec = self.anchors / self.stride
         self.anchor_wh = self.anchor_vec.view(1, self.na, 1, 1, 2)
