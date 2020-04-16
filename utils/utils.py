@@ -428,7 +428,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             lcls *= 3 / ng / model.nc
             lbox *= 3 / ng
 
-    loss = lbox + lobj + lcls + 1. * lcorner  ###5  ###8
+    loss = lbox / 2. + lobj + lcls + lcorner / 2.  ###5  ###8
     return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
 
 
@@ -837,8 +837,17 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=None):
         cv2.rectangle(img, c1, c2, color, -1)  # filled
         cv2.putText(img, label, (c1[0], c1[1] - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
 
-def plot_3d_box(x, img, color=None, label=None, line_thickness=None):
-    pass 
+def plot_3d_box(x, img, color=None, label=None, line_thickness=None):  ###11 new function
+    face_idx = [[0,1,5,4],
+                [1,2,6,5],
+                [2,3,7,6],
+                [3,0,4,7]]
+    h, w, c = img.shape
+    for ind_f in range(3, -1, -1):
+        f = face_idx[ind_f]
+        for j in range(4):
+            cv2.line(img, (x[2 * f[j]] * w, x[2 * f[j] + 1] * h),
+                    (x[2 * f[(j+1)%4]] * w, x[2 * f[(j+1)%4] +1] * h), color, 2, lineType=cv2.LINE_AA)
 
 def plot_wh_methods():  # from utils.utils import *; plot_wh_methods()
     # Compares the two methods for width-height anchor multiplication

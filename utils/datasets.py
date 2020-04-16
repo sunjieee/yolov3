@@ -440,7 +440,10 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 labels[:, 2] = ratio[1] * h * (x[:, 2] - x[:, 4] / 2) + pad[1]  # pad height
                 labels[:, 3] = ratio[0] * w * (x[:, 1] + x[:, 3] / 2) + pad[0]
                 labels[:, 4] = ratio[1] * h * (x[:, 2] + x[:, 4] / 2) + pad[1]
-                labels[:, 5:] = x[:, 5:]    ###6
+                #labels[:, 5:] = x[:, 5:]    ###6
+                for i in range(5, 21, 2):   ###12
+                    labels[:, i] = ratio[0] * w * x[:, i] + pad[0]    ###12
+                    labels[:, i + 1] = ratio[1] * h * x[:, i + 1] + pad[1]  ###12
 
         if self.augment:
             # Augment imagespace
@@ -466,6 +469,9 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
             # Normalize coordinates 0 - 1
             labels[:, [2, 4]] /= img.shape[0]  # height
             labels[:, [1, 3]] /= img.shape[1]  # width
+            for i in range(5, 21, 2):          ###12
+                labels[:, i + 1] /= img.shape[0]  ###12
+                labels[:, i] /= img.shape[1]      ###12
 
         if self.augment:
             # random left-right flip
@@ -474,6 +480,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img = np.fliplr(img)
                 if nL:
                     labels[:, 1] = 1 - labels[:, 1]
+                    for i in range(5, 20, 2):           ###12
+                        labels[:, i] = 1 - labels[:, i]  ###12
 
             # random up-down flip
             ud_flip = False
@@ -481,6 +489,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 img = np.flipud(img)
                 if nL:
                     labels[:, 2] = 1 - labels[:, 2]
+                    for i in range(6, 21, 2):          ###12
+                        labels[:, i] = 1 - labels[:, i]  ###12
 
         labels_out = torch.zeros((nL, 6 + 16))  ###6
         if nL:
@@ -574,15 +584,18 @@ def load_mosaic(self, index):
                 labels[:, 2] = h * (x[:, 2] - x[:, 4] / 2) + padh
                 labels[:, 3] = w * (x[:, 1] + x[:, 3] / 2) + padw
                 labels[:, 4] = h * (x[:, 2] + x[:, 4] / 2) + padh
+                for i in range(5, 21, 2):     ###13
+                    labels[:, i] = w * x[:, i] + padw    ###13
+                    labels[:, i + 1] = h * x[:, i + 1] + padh   ###13
             else:
-                labels = np.zeros((0, 5), dtype=np.float32)
+                labels = np.zeros((0, 5 + 16), dtype=np.float32)  ###13
             labels4.append(labels)
 
     # Concat/clip labels
     if len(labels4):
         labels4 = np.concatenate(labels4, 0)
         # np.clip(labels4[:, 1:] - s / 2, 0, s, out=labels4[:, 1:])  # use with center crop
-        np.clip(labels4[:, 1:], 0, 2 * s, out=labels4[:, 1:])  # use with random_affine
+        np.clip(labels4[:, 1:5], 0, 2 * s, out=labels4[:, 1:5])  # use with random_affine  ###13
 
     # Augment
     # img4 = img4[s // 2: int(s * 1.5), s // 2:int(s * 1.5)]  # center crop (WARNING, requires box pruning)
@@ -668,6 +681,10 @@ def random_affine(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10,
         xy[:, :2] = targets[:, [1, 2, 3, 4, 1, 4, 3, 2]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
         xy = (xy @ M.T)[:, :2].reshape(n, 8)
 
+        corner = np.ones((n * 8, 3))   ###13
+        corner[:, :2] = targets[:, 5: 5 + 16].reshape(n * 8, 2)    ###13
+        corner = (corner @ M.T)[:, :2].reshape(n, 16)    ###13
+
         # create new boxes
         x = xy[:, [0, 2, 4, 6]]
         y = xy[:, [1, 3, 5, 7]]
@@ -694,6 +711,7 @@ def random_affine(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10,
 
         targets = targets[i]
         targets[:, 1:5] = xy[i]
+        targets[:, 5:5 + 16] = corner[i]   ###13
 
     return img, targets
 
