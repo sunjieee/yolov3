@@ -1,0 +1,4 @@
+classes=8
+train=../kitti_3d/train.txt
+valid=../kitti_3d/val.txt
+names=data/kitti_3d.names
