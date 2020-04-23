@@ -145,6 +145,9 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     coords[:, [0, 2]] -= pad[0]  # x padding
     coords[:, [1, 3]] -= pad[1]  # y padding
     coords[:, :4] /= gain
+    coords[:, [6, 8, 10, 12, 14, 16, 18, 20]] -= pad[0] ###18
+    coords[:, [7, 9, 11, 13, 15, 17, 19, 21]] -= pad[1] ###18
+    coords[:, 6:] /= gain   ###18
     clip_coords(coords, img0_shape)
     return coords
 
@@ -405,7 +408,10 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             lbox += (1.0 - giou).sum() if red == 'sum' else (1.0 - giou).mean()  # giou loss
             tobj[b, a, gj, gi] = (1.0 - model.gr) + model.gr * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
             
-            lcorner += L1corner(ps[:, 5: 5 + 16], tcorners[i])   ###5
+            #lcorner += L1corner(ps[:, 5: 5 + 16], tcorners[i])   ###5
+            base_corner = get_base_corner(pxy, pwh, gj, gi)    ###15
+            lcorner += L1corner(ps[:, 5: 5 + 16] + base_corner, tcorners[i])  ###15
+
             if model.nc > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(ps[:, 5 + 16:], cn)  # targets   ###2
                 t[range(nb), tcls[i]] = cp
@@ -428,9 +434,21 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             lcls *= 3 / ng / model.nc
             lbox *= 3 / ng
 
-    loss = lbox / 2. + lobj + lcls + lcorner / 2.  ###5  ###8
+    loss = lbox + lobj + lcls + 0.25 * lcorner  ###5  ###8
     return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
 
+def get_base_corner(pxy, pwh, gj, gi):    ###15 new function
+    px, py = pxy.t()
+    pw, ph = pwh.t()
+    px_max = (px + gi + pw / 2.).unsqueeze(1)
+    px_min = (px + gi - pw / 2.).unsqueeze(1)
+    py_max = (py + gj + ph / 2.).unsqueeze(1)
+    py_min = (py + gj - ph / 2.).unsqueeze(1)
+    base_corner = torch.cat((px_max, py_max, px_max, py_max, 
+                            px_min, py_max, px_min, py_max,
+                            px_max, py_min, px_max, py_min,
+                            px_min, py_min, px_min, py_min), 1)
+    return base_corner 
 
 def build_targets(model, targets):
     # targets = [image, class, x, y, w, h]
@@ -483,7 +501,7 @@ def build_targets(model, targets):
             assert c.max() < model.nc, 'Model accepts %g classes labeled from 0-%g, however you labelled a class %g. ' \
                                        'See https://github.com/ultralytics/yolov3/wiki/Train-Custom-Data' % (
                                            model.nc, model.nc - 1, c.max())
-        corner_xy = t[:, 6:]      ###4
+        corner_xy = t[:, 6:] * ng[0]      ###4   ###15
         tcorners.append(corner_xy)   ###4
 
     return tcls, tbox, indices, av, tcorners   ###4
@@ -520,14 +538,14 @@ def non_max_suppression(prediction, conf_thres=0.1, iou_thres=0.6, multi_label=T
         
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
-
+        
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 5 + 16:] > conf_thres).nonzero().t()    ###3  ###choice
             x = torch.cat((box[i], x[i, j + 5 + 16].unsqueeze(1), j.float().unsqueeze(1), x[i, 5:5 + 16]), 1) ###3  ###9
         else:  # best class only
             conf, j = x[:, 5 + 16:].max(1)    ###3
-            x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1)), 1)    ###9
+            x = torch.cat((box, conf.unsqueeze(1), j.float().unsqueeze(1), x[:, 5: 5 + 16]),  1)    ###9
         
         # Filter by class
         if classes:
@@ -842,12 +860,11 @@ def plot_3d_box(x, img, color=None, label=None, line_thickness=None):  ###11 new
                 [1,2,6,5],
                 [2,3,7,6],
                 [3,0,4,7]]
-    h, w, c = img.shape
     for ind_f in range(3, -1, -1):
         f = face_idx[ind_f]
         for j in range(4):
-            cv2.line(img, (x[2 * f[j]] * w, x[2 * f[j] + 1] * h),
-                    (x[2 * f[(j+1)%4]] * w, x[2 * f[(j+1)%4] +1] * h), color, 2, lineType=cv2.LINE_AA)
+            cv2.line(img, (x[2 * f[j]], x[2 * f[j] + 1]),
+                    (x[2 * f[(j+1)%4]], x[2 * f[(j+1)%4] +1]), color, 2, lineType=cv2.LINE_AA)
 
 def plot_wh_methods():  # from utils.utils import *; plot_wh_methods()
     # Compares the two methods for width-height anchor multiplication

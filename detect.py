@@ -87,7 +87,7 @@ def detect(save_img=False):
         t1 = torch_utils.time_synchronized()
         pred = model(img, augment=opt.augment)[0]
         t2 = torch_utils.time_synchronized()
-
+        
         # to float
         if half:
             pred = pred.float()
@@ -95,7 +95,7 @@ def detect(save_img=False):
         # Apply NMS
         pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres,
                                    multi_label=False, classes=opt.classes, agnostic=opt.agnostic_nms)
-
+    
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
@@ -111,7 +111,7 @@ def detect(save_img=False):
             s += '%gx%g ' % img.shape[2:]  # print string
             if det is not None and len(det):
                 # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
+                det = scale_coords(img.shape[2:], det, im0.shape).round() ###18
 
                 # Print results
                 for c in det[:, 5].unique():         ###10
@@ -119,14 +119,20 @@ def detect(save_img=False):
                     s += '%g %ss, ' % (n, names[int(c)])  # add to string
 
                 # Write results
-                for *xyxy, conf, cls, corner in det:    ###10
+                #for *xyxy, conf, cls in det:    ###10
+                for d in det:     ###10
+                    xyxy = d[0:4]               ###10
+                    conf = d[4]                 ###10
+                    cls = d[5]                  ###10
+                    corner = d[6:]              ###10
                     if save_txt:  # Write to file
                         with open(save_path + '.txt', 'a') as file:
                             file.write(('%g ' * 6 + '\n') % (*xyxy, cls, conf))
 
                     if save_img or view_img:  # Add bbox to image
                         label = '%s %.2f' % (names[int(cls)], conf)
-                        plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
+                        
+                        #plot_one_box(xyxy, im0, label=label, color=colors[int(cls)])
                         plot_3d_box(corner, im0, color=colors[int(cls)])  ###10
 
             # Print time (inference + NMS)

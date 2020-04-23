@@ -109,7 +109,7 @@ def create_modules(module_defs, img_size):
                 bias_ = module_list[j][0].bias  # shape(255,)
                 bias = bias_[:modules.no * modules.na].view(modules.na, -1)  # shape(3,85)
                 bias[:, 4] += bo - bias[:, 4].mean()  # obj
-                bias[:, 5:] += bc - bias[:, 5:].mean()  # cls, view with utils.print_model_biases(model)
+                bias[:, 5 + 16:] += bc - bias[:, 5 + 16:].mean()  # cls, view with utils.print_model_biases(model) ###16
                 module_list[j][0].bias = torch.nn.Parameter(bias_, requires_grad=bias_.requires_grad)
             except:
                 print('WARNING: smart bias initialization failure.')
@@ -211,10 +211,25 @@ class YOLOLayer(nn.Module):
             io = p.clone()  # inference output
             io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
             io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
+            base_corner = get_corner(io[..., :2], io[..., 2:4])   ###17
+            io[..., 5:5 + 16] = (io[..., 5:5 + 16] + base_corner) * self.stride  ###17
             io[..., :4] *= self.stride
-            torch.sigmoid_(io[..., 4:])
+            torch.sigmoid_(io[..., 4]) ###16
+            torch.sigmoid_(io[..., 5 + 16:]) ###16
             return io.view(bs, -1, self.no), p  # view [1, 3, 13, 13, 85] as [1, 507, 85]
 
+def get_corner(xy, wh):  ###17 new function
+    x, y = xy[..., 0], xy[..., 1]
+    w, h = wh[..., 0], wh[..., 1]
+    x_max = (x + w / 2.).unsqueeze(4)
+    y_max = (y + h / 2.).unsqueeze(4)
+    x_min = (x - w / 2.).unsqueeze(4)
+    y_min = (y - h / 2.).unsqueeze(4)
+    base_corner = torch.cat((x_max, y_max, x_max, y_max, 
+                            x_min, y_max, x_min, y_max,
+                            x_max, y_min, x_max, y_min,
+                            x_min, y_min, x_min, y_min), 4)
+    return base_corner 
 
 class Darknet(nn.Module):
     # YOLOv3 object detection model
@@ -233,7 +248,6 @@ class Darknet(nn.Module):
         self.info(verbose)  # print model description
 
     def forward(self, x, augment=False, verbose=False):
-
         if not augment:
             return self.forward_once(x)
         else:  # Augment images (inference and test only) https://github.com/ultralytics/yolov3/issues/931
@@ -258,7 +272,6 @@ class Darknet(nn.Module):
             #     elif i == 2:
             #         yi *= (area > 32. ** 2).float()
             #     y[i] = yi
-
             y = torch.cat(y, 1)
             return y, None
 
