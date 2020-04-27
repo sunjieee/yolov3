@@ -409,9 +409,13 @@ def compute_loss(p, targets, model):  # predictions, targets, model
             tobj[b, a, gj, gi] = (1.0 - model.gr) + model.gr * giou.detach().clamp(0).type(tobj.dtype)  # giou ratio
             
             #lcorner += L1corner(ps[:, 5: 5 + 16], tcorners[i])   ###5
-            base_corner = get_base_corner(pxy, pwh, gj, gi)    ###15
+            use_wh = False ###19
+            if use_wh:     ###19
+                base_corner = get_base_corner(pxy, pwh, gj, gi, use_wh)    ###15
+            else:
+                base_corner = get_base_corner(pxy, pwh, gj, gi, use_wh)    ###19
             lcorner += L1corner(ps[:, 5: 5 + 16] + base_corner, tcorners[i])  ###15
-
+            
             if model.nc > 1:  # cls loss (only if multiple classes)
                 t = torch.full_like(ps[:, 5 + 16:], cn)  # targets   ###2
                 t[range(nb), tcls[i]] = cp
@@ -437,17 +441,23 @@ def compute_loss(p, targets, model):  # predictions, targets, model
     loss = lbox + lobj + lcls + 0.25 * lcorner  ###5  ###8
     return loss, torch.cat((lbox, lobj, lcls, loss)).detach()
 
-def get_base_corner(pxy, pwh, gj, gi):    ###15 new function
-    px, py = pxy.t()
-    pw, ph = pwh.t()
-    px_max = (px + gi + pw / 2.).unsqueeze(1)
-    px_min = (px + gi - pw / 2.).unsqueeze(1)
-    py_max = (py + gj + ph / 2.).unsqueeze(1)
-    py_min = (py + gj - ph / 2.).unsqueeze(1)
-    base_corner = torch.cat((px_max, py_max, px_max, py_max, 
+def get_base_corner(pxy, pwh, gj, gi, use_wh):    ###15 new function
+    if use_wh:
+        px, py = pxy.t()
+        pw, ph = pwh.t()
+        px_max = (px + gi + pw / 2.).unsqueeze(1)
+        px_min = (px + gi - pw / 2.).unsqueeze(1)
+        py_max = (py + gj + ph / 2.).unsqueeze(1)
+        py_min = (py + gj - ph / 2.).unsqueeze(1)
+        base_corner = torch.cat((px_max, py_max, px_max, py_max, 
                             px_min, py_max, px_min, py_max,
                             px_max, py_min, px_max, py_min,
                             px_min, py_min, px_min, py_min), 1)
+    else:
+        gi = gi.unsqueeze(1)
+        gj = gj.unsqueeze(1)
+        base_corner = torch.cat((gi, gj, gi, gj, gi, gj, gi, gj,
+                                gi, gj, gi, gj, gi, gj, gi, gj), 1)
     return base_corner 
 
 def build_targets(model, targets):

@@ -211,24 +211,35 @@ class YOLOLayer(nn.Module):
             io = p.clone()  # inference output
             io[..., :2] = torch.sigmoid(io[..., :2]) + self.grid  # xy
             io[..., 2:4] = torch.exp(io[..., 2:4]) * self.anchor_wh  # wh yolo method
-            base_corner = get_corner(io[..., :2], io[..., 2:4])   ###17
+            use_wh = False    ###20
+            if use_wh:   ###20
+                base_corner = get_corner(io[..., :2], io[..., 2:4], self.grid, use_wh)   ###17
+            else:
+                base_corner = get_corner(io[..., :2], io[..., 2:4], self.grid, use_wh)   ###20
             io[..., 5:5 + 16] = (io[..., 5:5 + 16] + base_corner) * self.stride  ###17
             io[..., :4] *= self.stride
             torch.sigmoid_(io[..., 4]) ###16
             torch.sigmoid_(io[..., 5 + 16:]) ###16
             return io.view(bs, -1, self.no), p  # view [1, 3, 13, 13, 85] as [1, 507, 85]
 
-def get_corner(xy, wh):  ###17 new function
-    x, y = xy[..., 0], xy[..., 1]
-    w, h = wh[..., 0], wh[..., 1]
-    x_max = (x + w / 2.).unsqueeze(4)
-    y_max = (y + h / 2.).unsqueeze(4)
-    x_min = (x - w / 2.).unsqueeze(4)
-    y_min = (y - h / 2.).unsqueeze(4)
-    base_corner = torch.cat((x_max, y_max, x_max, y_max, 
+def get_corner(xy, wh, grid, use_wh):  ###17 new function
+    if use_wh:
+        x, y = xy[..., 0], xy[..., 1]
+        w, h = wh[..., 0], wh[..., 1]
+        x_max = (x + w / 2.).unsqueeze(4)
+        y_max = (y + h / 2.).unsqueeze(4)
+        x_min = (x - w / 2.).unsqueeze(4)
+        y_min = (y - h / 2.).unsqueeze(4)
+        base_corner = torch.cat((x_max, y_max, x_max, y_max, 
                             x_min, y_max, x_min, y_max,
                             x_max, y_min, x_max, y_min,
                             x_min, y_min, x_min, y_min), 4)
+    else:
+        gi, gj = grid[..., 0], grid[..., 1]
+        gi = gi.unsqueeze(4)
+        gj = gj.unsqueeze(4)
+        base_corner = torch.cat((gi, gj, gi, gj, gi, gj, gi, gj,
+                                gi, gj, gi, gj, gi, gj, gi, gj), 4)
     return base_corner 
 
 class Darknet(nn.Module):
